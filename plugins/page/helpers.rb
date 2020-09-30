@@ -16,12 +16,12 @@ module AresMUSH
           if (Login.find_web_client(r))
             names << "#{r.name}#{Website.web_char_marker}"
           else
-            names << "#{r.name}<#{t('page.offline_status')}>"
+            names << "#{r.name}<#{t('global.offline_status')}>"
           end
         elsif (r.page_do_not_disturb)
           names << "#{r.name}<#{t('page.dnd_status')}>"
         elsif (r.is_afk?)
-          names << "#{r.name}<#{t('page.afk_status')}>"
+          names << "#{r.name}<#{t('global.afk_status')}>"
         elsif Status.is_idle?(client)
           time = TimeFormatter.format(client.idle_secs)
           names << "#{r.name}<#{time}>"
@@ -32,6 +32,7 @@ module AresMUSH
       return t('page.recipient_indicator', :recipients => names.join(", "))
     end
     
+    # NO LONGER USED.  Keeping for reference.
     def self.send_afk_message(client, other_client, other_char)
       if (!other_client)
         #client.emit_ooc t('page.recipient_is_offline', :name => other_char.name)
@@ -146,13 +147,13 @@ module AresMUSH
     end
     
     def self.is_thread_unread?(thread, char)
-      !(char.read_page_threads || []).include?(thread.id.to_s)
+      tracker = char.get_or_create_read_tracker
+      tracker.is_page_thread_unread?(thread)
     end
     
     def self.mark_thread_read(thread, char)      
-      threads = char.read_page_threads || []
-      threads << thread.id.to_s
-      char.update(read_page_threads: threads)
+      tracker = char.get_or_create_read_tracker
+      tracker.mark_page_thread_read(thread)
       Login.mark_notices_read(char, :pm, thread.id)
     end
     
@@ -160,9 +161,8 @@ module AresMUSH
       chars = Character.all.select { |c| !Page.is_thread_unread?(thread, c) }
       chars.each do |char|
         next if except_for_char && char == except_for_char
-        threads = char.read_page_threads || []
-        threads.delete thread.id.to_s
-        char.update(read_page_threads: threads)
+        tracker = char.get_or_create_read_tracker
+        tracker.mark_page_thread_unread(thread)
       end
     end
     

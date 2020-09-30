@@ -1,11 +1,11 @@
 module AresMUSH
   module Idle
     def self.can_idle_sweep?(actor)
-      actor.has_permission?("manage_idle")
+      actor && actor.has_permission?("manage_idle")
     end
     
     def self.can_manage_roster?(actor)
-      actor.has_permission?("manage_roster")
+      actor && actor.has_permission?("manage_roster")
     end
     
     def self.roster_enabled?
@@ -36,11 +36,10 @@ module AresMUSH
     
     def self.idle_cleanup(char, idle_status)
       Global.logger.debug "Starting idle cleanup for #{char.name}"
-      # Remove their handle.              
-      if (char.handle)
-        char.handle.delete
-      end
       Login.set_random_password(char)
+      if (char.handle)
+        AresCentral.unlink_handle(char)
+      end
       Global.dispatcher.queue_event CharIdledOutEvent.new(char.id, idle_status)
     end
     

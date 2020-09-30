@@ -1,8 +1,7 @@
 module AresMUSH
   module Channels
     def self.can_manage_channels?(actor)
-      return false if !actor
-      actor.has_permission?("manage_channels")
+      actor && actor.has_permission?("manage_channels")
     end
     
     def self.get_channel_options(char, channel)
@@ -28,13 +27,30 @@ module AresMUSH
       if (intersection.empty?)
         return nil
       end
-      intersection = intersection.map { |c| c.display_name(false) }
+      intersection = intersection.map { |c| Channels.display_name(other_char, c, false) }
       Channels.name_with_markers(intersection.join(", "))
     end
     
     def self.announce_enabled?(char, channel)
       options = Channels.get_channel_options(char, channel)
       options ? options.announce : false
+    end
+    
+    def self.channel_color(char, channel)
+      color = channel.color
+      if (char)
+        options = Channels.get_channel_options(char, channel)
+        if (options && !options.color.blank?)
+          color = options.color
+        end
+      end
+      color
+    end    
+    
+    def self.display_name(char, channel, include_markers = true)
+      color = Channels.channel_color(char, channel)
+      display = "#{color}#{channel.name}%xn"
+      include_markers ? Channels.name_with_markers(display) : display
     end
     
     def self.name_with_markers(name)
@@ -71,12 +87,14 @@ module AresMUSH
     def self.emit_to_channel(channel, original_msg, enactor = nil, title = nil)
       enactor = enactor || Game.master.system_character
       original_msg = "#{original_msg}".gsub(/%R/i, " ")
+      original_msg = "#{original_msg}".gsub(/[\r\n]/i, " ")
+
       channel.add_to_history "#{title} #{original_msg}", enactor
       channel.characters.each do |c|
         if (!Channels.is_muted?(c, channel))
           
           title_display = (title && Channels.show_titles?(c, channel)) ? "#{title} " : ""
-          formatted_msg = "#{channel.display_name} #{title_display}#{original_msg}"
+          formatted_msg = "#{Channels.display_name(c, channel)} #{title_display}#{original_msg}"
           
           Login.emit_if_logged_in(c, formatted_msg)
         end
@@ -136,13 +154,13 @@ module AresMUSH
     def self.can_join_channel?(char, channel)
       return true if channel.join_roles.empty?
       return true if Channels.can_manage_channels?(char)
-      return char.has_any_role?(channel.join_roles)
+      return char && char.has_any_role?(channel.join_roles)
     end
     
     def self.can_talk_on_channel?(char, channel)
       return true if channel.talk_roles.empty?
       return true if Channels.can_manage_channels?(char)
-      return char.has_any_role?(channel.talk_roles)
+      return char && char.has_any_role?(channel.talk_roles)
     end
     
     def self.with_an_enabled_channel(name, client, enactor, &block)
@@ -269,7 +287,7 @@ module AresMUSH
     end
     
     def self.report_channel_abuse(enactor, channel, messages, reason) 
-      messages = messages.map { |m| "  [#{OOCTime.local_long_timestr(enactor, m.created_at)}] #{channel.display_name} #{m.message}"}.join("%R")
+      messages = messages.map { |m| "  [#{OOCTime.local_long_timestr(enactor, m.created_at)}] #{Channels.display_name(nil, channel)} #{m.message}"}.join("%R")
 
       body = t('channels.channel_reported_body', :name => channel.name, :reporter => enactor.name)
       body << reason
@@ -302,11 +320,11 @@ module AresMUSH
         icon = Website.icon_for_char(enactor) 
         icon_url = icon ? "#{Game.web_portal_url}/game/uploads/#{icon}" :
              "https://www.gravatar.com/avatar/#{Digest::MD5.hexdigest(enactor.name)}?d=#{gravatar_style}"
-        resp = Net::HTTP.post_form(URI.parse(url), { 
+        connector = RestConnector.new(url)
+        connector.post( "", { 
           content: formatted_msg, 
           username: name,
-          avatar_url: icon_url })
-        # JSON.parse(resp.body)
+          avatar_url: icon_url } )
       end
     end
     

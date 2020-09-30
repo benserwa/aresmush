@@ -20,6 +20,19 @@ module AresMUSH
       actor && actor.has_permission?("manage_wiki")
     end
     
+    def self.can_manage_textfile?(enactor, file_type)
+      case file_type
+      when "text"
+        Website.can_manage_theme?(enactor) || Manage.can_manage_game?(enactor)
+      when "style"
+        Website.can_manage_theme?(enactor)
+      when "config"
+        Manage.can_manage_game?(enactor)
+      else
+        false
+      end
+    end
+    
     def self.check_login(request, allow_anonymous = false)
       return nil if allow_anonymous
       return { error: "You need to log in first." } if !request.enactor
@@ -87,7 +100,7 @@ module AresMUSH
     def self.can_edit_wiki_file?(actor, folder)
       return false if !actor
       wiki_admin = Website.can_manage_wiki?(actor)
-      own_folder = folder.upcase == actor.name_upcase
+      own_folder = folder.downcase == FilenameSanitizer.sanitize(actor.name)
       wiki_admin || own_folder
     end
     
@@ -105,7 +118,7 @@ module AresMUSH
     
     def self.wiki_templates
       templates = WikiPage.all.select { |p| p.category == "template" }.map { |p| {
-        title: p.title,
+        title: p.title.gsub("template:", ""),
         text: p.text
       }
       }
