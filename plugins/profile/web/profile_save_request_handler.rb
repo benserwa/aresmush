@@ -12,6 +12,8 @@ module AresMUSH
         if (!char)
           return { error: t('webportal.not_found') }
         end
+
+        Global.logger.info "#{enactor.name} saving profile for #{char.name}."
         
         manager = Profile.can_manage_profiles?(enactor)
         
@@ -51,10 +53,7 @@ module AresMUSH
         char.update(profile_icon: profile_icon)
         char.update(profile_gallery: gallery)
         char.update(profile_tags: tags)
-        
-        if (manager)
-          char.update(cg_background: Website.format_input_for_mush(request.args[:background]))
-        end
+        char.update(profile_order: (request.args[:profile_order] || "").split(',').map { |o| o.strip })
         
         relationships = {}
         (request.args[:relationships] || {}).each do |name, data|
@@ -76,7 +75,30 @@ module AresMUSH
         char.update(relationships_category_order: relation_category_order)
         
         Describe.save_web_descs(char, request.args['descs'])
-        CustomCharFields.save_fields_from_profile_edit(char, request.args)
+
+        errors = CustomCharFields.save_fields_from_profile_edit(char, request.args) || []
+        if (errors.class == Array && errors.any?)
+          return { error: errors.join("\n") }
+        end
+        
+        if (Roles.can_assign_role?(enactor))
+          error = Roles.save_web_roles(char, request.args['roles'], enactor)
+          if (error)
+            return { error: error }
+          end
+        end
+
+        if (Idle.can_manage_roster?(enactor))
+          Idle.save_web_roster_fields(char, request.args['roster'])
+        end
+        
+        if (Chargen.can_manage_bgs?(enactor))
+          char.update(cg_background: Website.format_input_for_mush(request.args[:background]))
+        end
+        
+        if (Idle.can_idle_sweep?(enactor))
+          char.update(idle_notes: Website.format_input_for_mush(request.args[:idle_notes]))
+        end
         
         ## DO PROFILE LAST SO IT TRIGGERS THE SOURCE HISTORY UPDATE
         profile = {}

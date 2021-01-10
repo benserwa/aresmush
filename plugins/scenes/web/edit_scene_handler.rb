@@ -16,7 +16,7 @@ module AresMUSH
           return { error: t('dispatcher.not_allowed') }
         end
         
-        Global.logger.debug "Scene #{scene.id} edited by #{enactor.name}."
+        Global.logger.info "Scene #{scene.id} edited by #{enactor.name}."
         
         if (scene.shared)
           [ :log, :location, :summary, :scene_type, :title, :icdate ].each do |field|
@@ -37,9 +37,32 @@ module AresMUSH
         scene.update(scene_pacing: request.args[:scene_pacing])
         scene.update(title: request.args[:title])
         scene.update(icdate: request.args[:icdate])
-        scene.update(plot: Plot[request.args[:plot_id]])
         scene.update(limit: request.args[:limit])
-            
+        
+        plot_ids = request.args[:plots] || []
+        plots = []
+        plot_ids.each do |id|
+          plot = Plot[id]
+          if (plot)
+            plots << plot
+          end
+        end
+
+        scene.plot_links.each do |link|
+          # Plot removed - delete plot link
+          if (!plots.any? { |p| link.plot == p })
+            link.delete
+          end
+        end
+        
+        plots.each do |p|
+          existing_link = PlotLink.find_link(p, scene)
+          # Plot added - add plot link
+          if (!existing_link)
+            PlotLink.create(plot: p, scene: scene)
+          end
+        end
+          
         if (!scene.completed)
           is_private = request.args[:privacy] == "Private"
           scene.update(private_scene: is_private)

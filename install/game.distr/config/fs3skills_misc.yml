@@ -18,6 +18,7 @@ fs3skills:
     practice: learn
     train: learn
     xp/raise: learn
+    roll/secret: roll/private
   achievements:
     fs3_luck_spent:
       type: fs3
@@ -26,3 +27,6 @@ fs3skills:
       type: fs3
       message: Rolled a skill.
   job_on_luck_spend: true
+  permissions:
+    manage_abilities: Edit ability ratings on other chars.
+    view_sheets: Can view other characters' sheets.

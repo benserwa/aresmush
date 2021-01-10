@@ -18,7 +18,10 @@ module AresMUSH
         demographics = Demographics.build_web_demographics_data(char, enactor)
         groups = Demographics.build_web_groups_data(char)
 
-        profile = char.profile.each_with_index.map { |(section, data), index| 
+        profile = char.profile
+        .sort_by { |k, v| [ char.profile_order.index { |p| p.downcase == k.downcase } || 999, k ] }
+        .each_with_index
+        .map { |(section, data), index| 
           {
             name: section.titlecase,
             key: section.parameterize(),
@@ -42,7 +45,7 @@ module AresMUSH
              .map { |name, data| {
                name: name,
                is_npc: data['is_npc'],
-               icon: data['npc_image'] || Website.icon_for_name(name),
+               icon: data['is_npc'] ? data['npc_image'] : Website.icon_for_name(name),
                name_and_nickname: Demographics.name_and_nickname(Character.named(name)),
                text: Website.format_markdown_for_html(data['relationship'])
              }
@@ -77,6 +80,12 @@ module AresMUSH
           traits = nil
         end
         
+        if Manage.is_extra_installed?("rpg")
+          rpg = Rpg.get_sheet_for_web_viewing(char, enactor)
+        else
+          rpg = nil
+        end
+        
         if Manage.is_extra_installed?("fate")
           fate = Fate.get_web_sheet(char, enactor)
         else
@@ -86,10 +95,12 @@ module AresMUSH
         if (enactor)
           if (enactor.is_admin?)
             siteinfo = Login.build_web_site_info(char, enactor)
+            roles = char.roles.map { |r| r.name }
           end
           Login.mark_notices_read(enactor, :achievement)
         else
           siteinfo = nil
+          roles = nil
         end
           
         {
@@ -122,6 +133,7 @@ module AresMUSH
           traits: traits,
           fate: fate,
           files: files,
+          rpg: rpg,
           last_profile_version: char.last_profile_version ? char.last_profile_version.id : nil,
           achievements: Achievements.is_enabled? ? Achievements.build_achievements(char) : nil,
           
@@ -129,7 +141,8 @@ module AresMUSH
           idle_notes: char.idle_notes ? Website.format_markdown_for_html(char.idle_notes) : nil,
           custom: CustomCharFields.get_fields_for_viewing(char, enactor),
           show_notes: char == enactor || Utils.can_manage_notes?(enactor),
-          siteinfo: siteinfo
+          siteinfo: siteinfo,
+          roles: roles
           
         }
       end
